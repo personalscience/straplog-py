@@ -1,0 +1,16 @@
+[project]
+name = "straplog"
+version = "0.1.0"
+description = "Read StrapLog exports (Polar H10 RR intervals in SQLite): library and CLI."
+requires-python = ">=3.11"
+dependencies = ["numpy", "pandas"]
+
+[project.scripts]
+straplog = "straplog.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
