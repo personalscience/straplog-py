@@ -1,0 +1,36 @@
+# Build, test, and publish to PyPI on a version tag (v0.2.0, ...).
+# Auth is PyPI trusted publishing (OIDC): no token in the repo. The PyPI
+# publisher is registered as personalscience/straplog-py, publish.yml, env `pypi`.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tag matches package version
+        run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
+      - run: uv run --group dev pytest -q
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

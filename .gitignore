@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+.venv/
+*.sqlite
+.claude/settings.local.json
+.claude/skills/
+.claude/rules/
