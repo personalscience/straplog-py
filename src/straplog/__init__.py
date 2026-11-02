@@ -7,4 +7,4 @@ format-agnostic HRV algorithms; `straplog.plot` is the house chart style
 (needs the `plot` extra); `straplog.cli` is the agent tool surface.
 The schema is docs/SCHEMA.md in the StrapLog app repo.
 """
-__version__ = "0.3.0"
+__version__ = "0.3.1"

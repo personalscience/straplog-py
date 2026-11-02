@@ -4,12 +4,16 @@ The app rewrites `index.json` after every export and delete (ExportIndex),
 so an agent reads one file instead of opening each snapshot. Exports the
 index does not list (older builds, files copied in from elsewhere) are
 read directly, each as the recording it is named after, so a folder without
-an index still lists completely and without duplicates.
+an index still lists completely and without duplicates. A stray file in the
+scan (empty, or not an export) is skipped with a warning, so one bad file
+cannot hide every other recording; naming that file directly still fails.
 """
 from __future__ import annotations
 
 import json
 import re
+import sqlite3
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -31,9 +35,17 @@ def entries(where: Path = DEFAULT_DIR) -> list[dict]:
         indexed = json.loads((where / INDEX).read_text())["recordings"]
     listed = {e["file"] for e in indexed}
     scanned = [e for f in sorted(where.glob("*.sqlite")) if f.name not in listed
-               for e in export.recordings(f, named_only=True)]
+               for e in _scan(f)]
     rows = [_located(e, where) for e in indexed + scanned]
     return sorted(rows, key=lambda e: (e["started_at_ms"], e["id"]), reverse=True)
+
+
+def _scan(path: Path) -> list[dict]:
+    try:
+        return export.recordings(path, named_only=True)
+    except sqlite3.DatabaseError as exc:
+        print(f"straplog: skipping {path.name}: not a readable export ({exc})", file=sys.stderr)
+        return []
 
 
 def select(rows: list[dict], activity: str | None = None, since: str | None = None,

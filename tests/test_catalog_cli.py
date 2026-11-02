@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,20 @@ def test_index_then_scan_newest_first(folder: Path):
     assert [(e["activity"], e["file"]) for e in rows] == [
         ("sleep", "261016-1349-sleep.sqlite"), ("other", "261015-1349-WALK.sqlite")]
     assert all(e["downloaded"] and Path(e["path"]).parent == folder for e in rows)
+
+
+@pytest.mark.parametrize("content", [b"", b"not a database, just some bytes long enough to read"])
+def test_scan_skips_a_file_that_is_not_an_export(folder: Path, content: bytes, capsys):
+    (folder / "261102-0752-stray.sqlite").write_bytes(content)
+    assert len(catalog.entries(folder)) == 2
+    assert "261102-0752-stray.sqlite" in capsys.readouterr().err
+
+
+def test_a_named_file_that_is_not_an_export_still_fails(tmp_path: Path):
+    stray = tmp_path / "stray.sqlite"
+    stray.touch()
+    with pytest.raises(sqlite3.DatabaseError):
+        catalog.entries(stray)
 
 
 def test_evicted_index_entry_is_not_downloaded(folder: Path):

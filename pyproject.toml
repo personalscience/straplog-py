@@ -1,6 +1,6 @@
 [project]
 name = "straplog"
-version = "0.3.0"
+version = "0.3.1"
 description = "Read StrapLog exports (Polar H10 RR intervals in SQLite) and compute HRV: library and CLI."
 readme = "README.md"
 license = "MIT"
