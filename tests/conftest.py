@@ -35,6 +35,8 @@ UPDATE meta SET value = '3' WHERE key = 'schema_version';
 
 SLEEP_PRESET = {"id": "sleep", "title": "Sleep", "markers": ["lights_out", "awake", "up"],
                 "pacer": False, "overnight": True}
+# 1.1 dropped `pacer` from the preset when the pacer became available any time.
+OTHER_PRESET_1_1 = {"id": "other", "title": "Other", "markers": ["a", "b", "c", "end"], "overnight": False}
 
 
 def make_straplog(path: Path, notifications: list[tuple[int, list[int]]],
@@ -63,17 +65,20 @@ def make_straplog(path: Path, notifications: list[tuple[int, list[int]]],
 
 def make_v3(path: Path, notifications, activity: str = "sleep",
             markers: list[tuple[int, str | None, str | None]] = (),
-            end_ms: int | None = None, name: str = "sleep 2026-10-15") -> Path:
-    """A v3 export with ExportMeta rows; markers are (at_ms, label, note)."""
+            end_ms: int | None = None, name: str = "sleep 2026-10-15",
+            preset: dict = SLEEP_PRESET, events: list[tuple[int, str, str | None]] = ()) -> Path:
+    """A v3 export with ExportMeta rows; markers are (at_ms, label, note), other
+    events (at_ms, kind, note)."""
     make_straplog(path, notifications, [(START_MS, "start", None)], end_ms, name)
     con = sqlite3.connect(path)
     con.executescript(V3_MIGRATION)
     con.execute("UPDATE recording SET activity = ?", (activity,))
     con.executemany("INSERT INTO event(recording_id, at_ms, kind, label, note) "
                     "VALUES (1, ?, 'marker', ?, ?)", markers)
+    con.executemany("INSERT INTO event(recording_id, at_ms, kind, note) VALUES (1, ?, ?, ?)", events)
     con.executemany("INSERT INTO meta VALUES (?, ?)", [
         ("app_version", "0.2.0 (7)"), ("exported_at_ms", str(START_MS + 10**7)),
-        ("preset", json.dumps(SLEEP_PRESET)), ("event_kinds", '["start","stop","marker"]')])
+        ("preset", json.dumps(preset)), ("event_kinds", '["start","stop","marker"]')])
     con.commit()
     con.close()
     return path

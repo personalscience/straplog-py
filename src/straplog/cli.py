@@ -3,6 +3,7 @@
     straplog ls [FOLDER|FILE] [--activity sleep] [--since 14d] [--limit N] [--json]
     straplog rr FILE [--id N] [--json]          beats: t_ms, rr_ms
     straplog events FILE [--id N] [--markers] [--json]
+    straplog pacer FILE [--id N] [--json]       paced-breathing sessions
     straplog meta FILE
 
 FILE is a path or a bare export name in the iCloud folder. Times are epoch ms
@@ -41,6 +42,11 @@ def _rr(args) -> None:
 
 def _events(args) -> None:
     _table(export.events(_file(args), args.id, args.markers), ("at_ms", "kind", "label", "note"), args.json)
+
+
+def _pacer(args) -> None:
+    _table(export.pacer_sessions(_file(args), args.id),
+           ("start_ms", "stop_ms", "rate", "inhale_s", "exhale_s", "t0_ms"), args.json)
 
 
 def _meta(args) -> None:
@@ -86,6 +92,7 @@ def _parser() -> argparse.ArgumentParser:
 
     for name, run, help_ in (("rr", _rr, "beats: t_ms, rr_ms"),
                              ("events", _events, "events: at_ms, kind, label, note"),
+                             ("pacer", _pacer, "paced-breathing sessions: start/stop, rate, inhale/exhale, t0"),
                              ("meta", _meta, "meta table and index entry, as JSON")):
         c = sub.add_parser(name, help=help_)
         c.add_argument("file")

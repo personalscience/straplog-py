@@ -83,3 +83,14 @@ def test_cli_resolves_bare_names_in_the_default_folder(walk: Path, monkeypatch, 
 def test_cli_missing_file(capsys):
     with pytest.raises(SystemExit, match="No such export"):
         cli.main(["rr", "/nonexistent/x.sqlite"])
+
+
+def test_cli_pacer(tmp_path: Path, capsys):
+    path = make_v3(tmp_path / "261015-1349-other_2026-10-15.sqlite", steady(100), activity="other",
+                   name="other 2026-10-15", end_ms=START_MS + 100_000,
+                   events=[(START_MS, "pacer_start", "6.0/min in4.0 out6.0 t0=1"), (START_MS + 9_000, "pacer_stop", None)])
+    [s] = json.loads(run(capsys, "pacer", str(path), "--json"))
+    assert s == {"start_ms": START_MS, "stop_ms": START_MS + 9_000, "rate": 6.0,
+                 "inhale_s": 4.0, "exhale_s": 6.0, "t0_ms": 1}
+    [row] = csv.DictReader(io.StringIO(run(capsys, "pacer", str(path))))
+    assert row["rate"] == "6.0" and row["t0_ms"] == "1"

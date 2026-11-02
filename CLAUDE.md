@@ -17,4 +17,5 @@ uv run --group dev pytest -q · uv build · uv publish (TestPyPI first)
 
 ## Vault
 
+- Hub note: `~/Documents/Notes/Projects/Personal Science/StrapLog/StrapLog.md`
 - Plan: `~/.claude/plans/straplog-skills-consolidation.md`

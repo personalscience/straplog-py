@@ -10,6 +10,7 @@ as activity `other` with labels left in `note`, as the app's v3 migration does.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,6 +23,8 @@ from ._sqlite import columns, connect, require_snapshot
 GAP_THRESHOLD_MS = 3000
 # meta values the app writes as JSON (ExportMeta).
 JSON_META = ("preset", "event_kinds")
+# pacer_start note: `6.0/min in5.0 out5.0 t0=<epoch ms>`; pre-1.2 files carry only `6.0/min`.
+_PACER_NOTE = re.compile(r"^(\d+(?:\.\d+)?)/min(?: in(\d+(?:\.\d+)?))?(?: out(\d+(?:\.\d+)?))?(?: t0=(\d+))?$")
 
 
 def meta(path: Path) -> dict:
@@ -86,6 +89,35 @@ def events(path: Path, rid: int | None = None, markers_only: bool = False) -> li
     """Events in time order: `at_ms`, `kind`, `label` (v3 markers), `note`."""
     with _open(path) as con:
         return _events(con, _one_recording(con, rid, path), markers_only)
+
+
+def pacer_sessions(path: Path, rid: int | None = None) -> list[dict]:
+    """Paced-breathing sessions in time order: `start_ms`, `stop_ms` (None if
+    unstopped), `rate` (breaths/min), `inhale_s`, `exhale_s`, `t0_ms` (when the
+    pacer actually began; earlier than `start_ms` if the recording started
+    mid-pacer). Each start pairs with the next stop; a start followed by
+    another start leaves the first unstopped. Pre-1.2 notes (`6.0/min`) mean
+    equal halves and t0 = start. Starts with unparseable notes or a zero rate
+    are skipped, as in the app's `PacerStamp`."""
+    out: list[dict] = []
+    open_: dict | None = None
+    for e in events(path, rid):
+        if e["kind"] == "pacer_start":
+            m = _PACER_NOTE.match(e["note"] or "")
+            rate = float(m[1]) if m else 0.0
+            if not rate:
+                open_ = None
+                continue
+            half = 30 / rate
+            open_ = {"start_ms": e["at_ms"], "stop_ms": None, "rate": rate,
+                     "inhale_s": float(m[2]) if m[2] else half,
+                     "exhale_s": float(m[3]) if m[3] else half,
+                     "t0_ms": int(m[4]) if m[4] else e["at_ms"]}
+            out.append(open_)
+        elif e["kind"] == "pacer_stop" and open_ is not None:
+            open_["stop_ms"] = e["at_ms"]
+            open_ = None
+    return out
 
 
 def _events(con: sqlite3.Connection, rid: int, markers_only: bool) -> list[dict]:

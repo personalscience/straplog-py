@@ -32,7 +32,7 @@ hrv.rolling_features(rr)      # 2-min windows, 1-min stride: hr_bpm, alpha1, rms
 | `straplog.db` | Load beats and markers as DataFrames in local time |
 | `straplog.hrv` | Artifact filter, time-domain metrics, DFA α1, sliding windows. Works on any RR series |
 | `straplog.plot` | House chart style (plotnine; `plot` extra) |
-| `straplog.cli` | `straplog ls / rr / events / meta` |
+| `straplog.cli` | `straplog ls / rr / events / pacer / meta` |
 
 ## CLI
 
@@ -40,6 +40,7 @@ hrv.rolling_features(rr)      # 2-min windows, 1-min stride: hr_bpm, alpha1, rms
 straplog ls --activity sleep --since 14d
 straplog rr 251018-0712-REST --json
 straplog events 251018-0712-REST --markers
+straplog pacer 251018-0712-REST --json   # paced-breathing sessions (library: export.pacer_sessions)
 ```
 
 A bare export name resolves against the StrapLog iCloud folder.

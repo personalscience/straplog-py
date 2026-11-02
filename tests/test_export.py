@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import START_MS, TZ, make_straplog, make_v3, steady
+from conftest import OTHER_PRESET_1_1, START_MS, TZ, make_straplog, make_v3, steady
 from straplog import export
 
 
@@ -28,6 +28,17 @@ def test_meta_decodes_json_values(tmp_path: Path):
     assert m["schema_version"] == "3" and m["app_version"] == "0.2.0 (7)"
     assert m["preset"]["markers"] == ["lights_out", "awake", "up"]
     assert m["event_kinds"] == ["start", "stop", "marker"]
+
+
+def test_1_1_preset_without_pacer_reads_with_pacer_events(tmp_path: Path):
+    path = make_v3(tmp_path / "261015-1349-other_2026-10-15.sqlite", steady(100), activity="other",
+                   preset=OTHER_PRESET_1_1, name="other 2026-10-15", end_ms=START_MS + 100_000,
+                   events=[(START_MS, "pacer_start", "6.0/min"), (START_MS + 90_000, "pacer_stop", None)])
+    assert "pacer" not in export.meta(path)["preset"]
+    [e] = export.recordings(path)
+    assert e["activity"] == "other" and e["beats"] == 100
+    assert [(x["kind"], x["note"]) for x in export.events(path) if x["kind"].startswith("pacer")] == \
+        [("pacer_start", "6.0/min"), ("pacer_stop", None)]
 
 
 def test_v2_reads_as_other_without_labels(walk: Path):
@@ -89,3 +100,48 @@ def test_ambiguous_file_needs_an_id(tmp_path: Path):
         export.beats(path)
     with pytest.raises(SystemExit, match="Recording 3 not found"):
         export.events(path, 3)
+
+
+def _pacer_file(tmp_path: Path, events: list[tuple[int, str, str | None]]) -> Path:
+    return make_v3(tmp_path / "261015-1349-other_2026-10-15.sqlite", steady(100), activity="other",
+                   preset=OTHER_PRESET_1_1, name="other 2026-10-15", end_ms=START_MS + 100_000, events=events)
+
+
+def test_pacer_sessions_new_format(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", f"5.5/min in4.4 out6.5 t0={START_MS}"),
+                                  (START_MS + 60_000, "pacer_stop", None)])
+    assert export.pacer_sessions(path) == [{"start_ms": START_MS, "stop_ms": START_MS + 60_000, "rate": 5.5,
+                                            "inhale_s": 4.4, "exhale_s": 6.5, "t0_ms": START_MS}]
+
+
+def test_pacer_sessions_legacy_note_has_equal_halves_and_t0_at_start(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", "6.0/min"), (START_MS + 90_000, "pacer_stop", None)])
+    assert export.pacer_sessions(path) == [{"start_ms": START_MS, "stop_ms": START_MS + 90_000, "rate": 6.0,
+                                            "inhale_s": 5.0, "exhale_s": 5.0, "t0_ms": START_MS}]
+
+
+def test_pacer_sessions_t0_may_precede_start(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", f"6.0/min in5.0 out5.0 t0={START_MS - 42_000}")])
+    [s] = export.pacer_sessions(path)
+    assert s["t0_ms"] == START_MS - 42_000 and s["start_ms"] == START_MS
+
+
+def test_pacer_sessions_unstopped_and_restart(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", "6.0/min"),
+                                  (START_MS + 10_000, "pacer_start", "5.0/min"),
+                                  (START_MS + 50_000, "pacer_stop", None),
+                                  (START_MS + 60_000, "pacer_start", "6.0/min")])
+    assert [(s["start_ms"] - START_MS, s["stop_ms"] and s["stop_ms"] - START_MS) for s in export.pacer_sessions(path)] == \
+        [(0, None), (10_000, 50_000), (60_000, None)]
+
+
+def test_pacer_sessions_skips_unparseable_start(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", "fast"), (START_MS + 5_000, "pacer_stop", None),
+                                  (START_MS + 10_000, "pacer_start", None),
+                                  (START_MS + 20_000, "pacer_start", "6.0/min")])
+    assert [s["start_ms"] for s in export.pacer_sessions(path)] == [START_MS + 20_000]
+
+
+def test_pacer_sessions_skips_zero_rate(tmp_path: Path):
+    path = _pacer_file(tmp_path, [(START_MS, "pacer_start", "0.0/min"), (START_MS + 5_000, "pacer_stop", None)])
+    assert export.pacer_sessions(path) == []
